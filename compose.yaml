@@ -1,0 +1,41 @@
+services:
+  database:
+    image: postgres:16-alpine
+    ports:
+      - "127.0.0.1:5434:5432"
+    environment:
+      POSTGRES_DB: event_quality
+      POSTGRES_USER: quality_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - event_quality_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./sql/create-quality-results.sql:/docker-entrypoint-initdb.d/02-quality-results.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quality_user -d event_quality"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    environment:
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      N8N_SECURE_COOKIE: "false"
+      GENERIC_TIMEZONE: Asia/Singapore
+      TZ: Asia/Singapore
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      database:
+        condition: service_healthy
+
+volumes:
+  event_quality_data:
+  n8n_data:

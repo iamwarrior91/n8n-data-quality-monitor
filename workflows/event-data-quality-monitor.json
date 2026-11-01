@@ -1,0 +1,244 @@
+{
+  "name": "Event Registration Data Quality Monitor",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "795c9aef-c87c-4743-a8e8-d6c3e2bdbec7",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        230
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 9,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "c3a4e0ea-a0e3-43d5-bec1-9fa0d8aeb60a",
+      "name": "Every day at 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        390
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  COUNT(*) AS total_rows,\n  COUNT(*) FILTER (WHERE full_name IS NULL OR btrim(full_name) = '') AS missing_names,\n  COUNT(*) FILTER (WHERE email IS NULL OR btrim(email) = '') AS missing_emails,\n  COUNT(*) FILTER (WHERE event_name IS NULL OR btrim(event_name) = '') AS missing_events,\n  COUNT(*) FILTER (WHERE ticket_type IS NULL OR btrim(ticket_type) = '') AS missing_ticket_types,\n  COUNT(*) FILTER (WHERE registered_at IS NULL) AS missing_registration_dates,\n  COUNT(*) - COUNT(DISTINCT registration_code) AS duplicate_registration_codes\nFROM event_registrations;"
+      },
+      "id": "3f518c8a-9e4e-4c9b-b854-b9e735dd8b02",
+      "name": "Profile event data",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        500,
+        310
+      ],
+      "credentials": {
+        "postgres": {
+          "name": "Event Quality PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nconst totalRows = Number(result.total_rows);\nconst missingNames = Number(result.missing_names);\nconst missingEmails = Number(result.missing_emails);\nconst missingEvents = Number(result.missing_events);\nconst missingTicketTypes = Number(result.missing_ticket_types);\nconst missingRegistrationDates = Number(result.missing_registration_dates);\nconst duplicateRegistrationCodes = Number(result.duplicate_registration_codes);\n\nconst issues = [];\nif (totalRows === 0) issues.push('No event registrations were found.');\nif (missingNames > 0) issues.push(`${missingNames} record(s) have a missing name.`);\nif (missingEmails > 0) issues.push(`${missingEmails} record(s) have a missing email.`);\nif (missingEvents > 0) issues.push(`${missingEvents} record(s) have a missing event name.`);\nif (missingTicketTypes > 0) issues.push(`${missingTicketTypes} record(s) have a missing ticket type.`);\nif (missingRegistrationDates > 0) issues.push(`${missingRegistrationDates} record(s) have a missing registration date.`);\nif (duplicateRegistrationCodes > 0) issues.push(`${duplicateRegistrationCodes} duplicate registration code(s) found.`);\n\nreturn [{\n  json: {\n    status: issues.length ? 'FAIL' : 'PASS',\n    checked_at: new Date().toISOString(),\n    total_rows: totalRows,\n    missing_names: missingNames,\n    missing_emails: missingEmails,\n    missing_events: missingEvents,\n    missing_ticket_types: missingTicketTypes,\n    missing_registration_dates: missingRegistrationDates,\n    duplicate_registration_codes: duplicateRegistrationCodes,\n    message: issues.length ? `Data quality alert: ${issues.join(' ')}` : `Data quality check passed: ${totalRows} registrations checked.`\n  }\n}];"
+      },
+      "id": "d9e205b6-6e1f-41b6-9e91-d8f90ff2c784",
+      "name": "Evaluate data quality",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        310
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO data_quality_results (checked_at, status, total_rows, missing_names, missing_emails, missing_events, missing_ticket_types, missing_registration_dates, duplicate_registration_codes, message)\nSELECT checked_at, status, total_rows, missing_names, missing_emails, missing_events, missing_ticket_types, missing_registration_dates, duplicate_registration_codes, message\nFROM jsonb_to_record($1::jsonb) AS r(checked_at timestamptz, status text, total_rows bigint, missing_names bigint, missing_emails bigint, missing_events bigint, missing_ticket_types bigint, missing_registration_dates bigint, duplicate_registration_codes bigint, message text)\nRETURNING *;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json)] }}"
+        }
+      },
+      "id": "adfc6b87-1bb5-46c9-9f13-2dad72edcd41",
+      "name": "Save check results",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        980,
+        310
+      ],
+      "credentials": {
+        "postgres": {
+          "name": "Event Quality PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4338120a-2d75-42c4-8bfe-befef1fef6ff",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "FAIL",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "faf2b8c3-4d30-4e46-a1f9-6fbd9f1f3661",
+      "name": "Any quality issues?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1220,
+        310
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ $json.message }}"
+      },
+      "id": "cbd5a884-0529-4c67-9e5e-0e1efb6a7bb8",
+      "name": "Raise data quality alert",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1460,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2e58cd04-f982-4775-8e3e-77529aa720f0",
+              "name": "message",
+              "value": "={{ $json.message }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0c7c4f25-cf0b-4920-b802-8b9cd970c47d",
+      "name": "Data quality passed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1460,
+        410
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Profile event data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every day at 9 AM": {
+      "main": [
+        [
+          {
+            "node": "Profile event data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Profile event data": {
+      "main": [
+        [
+          {
+            "node": "Evaluate data quality",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate data quality": {
+      "main": [
+        [
+          {
+            "node": "Save check results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any quality issues?": {
+      "main": [
+        [
+          {
+            "node": "Raise data quality alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Data quality passed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save check results": {
+      "main": [
+        [
+          {
+            "node": "Any quality issues?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c26c9012-65c7-4958-a174-32a545d809aa",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
