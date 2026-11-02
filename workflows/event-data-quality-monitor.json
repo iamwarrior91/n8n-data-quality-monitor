@@ -17,15 +17,14 @@
         "rule": {
           "interval": [
             {
-              "field": "days",
-              "triggerAtHour": 9,
-              "triggerAtMinute": 0
+              "field": "minutes",
+              "minutesInterval": 15
             }
           ]
         }
       },
       "id": "c3a4e0ea-a0e3-43d5-bec1-9fa0d8aeb60a",
-      "name": "Every day at 9 AM",
+      "name": "Every 15 minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -169,17 +168,6 @@
         ]
       ]
     },
-    "Every day at 9 AM": {
-      "main": [
-        [
-          {
-            "node": "Profile event data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Profile event data": {
       "main": [
         [
@@ -225,6 +213,17 @@
         [
           {
             "node": "Any quality issues?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 15 minutes": {
+      "main": [
+        [
+          {
+            "node": "Profile event data",
             "type": "main",
             "index": 0
           }

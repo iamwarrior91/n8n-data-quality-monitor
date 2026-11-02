@@ -11,10 +11,10 @@ An n8n automation project that profiles event-registration data in PostgreSQL, i
 ## Workflow
 
 ```text
-Manual trigger or daily schedule -> PostgreSQL data profile -> JavaScript evaluation -> Save results to PostgreSQL -> PASS or data-quality alert
+Manual trigger or 15-minute schedule -> PostgreSQL data profile -> JavaScript evaluation -> Save results to PostgreSQL -> PASS or data-quality alert
 ```
 
-The workflow runs every day at 9:00 AM after you activate it in n8n. It can also be executed manually while testing.
+The workflow runs every 15 minutes after you publish it in n8n. Docker and n8n must remain running. It can also be executed manually while testing.
 
 ## Tools Used
 
@@ -56,7 +56,7 @@ User: quality_user
 Password: the POSTGRES_PASSWORD value in .env
 ```
 
-7. Click **Execute workflow**. The seeded data should produce a successful execution. Activate the workflow when you are ready for the daily schedule.
+7. Click **Execute workflow**. The seeded data should produce a successful execution. Activate the workflow when you are ready for the 15-minute schedule.
 
 ## Demonstrate a Failed Check
 
