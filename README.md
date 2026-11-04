@@ -16,6 +16,15 @@ Manual trigger or 15-minute schedule -> PostgreSQL data profile -> JavaScript ev
 
 The workflow runs every 15 minutes after you publish it in n8n. Docker and n8n must remain running. It can also be executed manually while testing.
 
+## Dashboard
+
+![Power BI data quality dashboard showing the latest result, total checks, last check time, PASS/FAIL filters, and check history](images/data-quality-dashboard.png)
+
+The Power BI dashboard shows the latest check result, total checks, and last check
+time. A result slicer filters the history table, with green PASS and red FAIL
+indicators and messages describing detected issues. The screenshot includes
+intentional failures from testing with synthetic registration data.
+
 ## Tools Used
 
 - n8n
@@ -23,6 +32,8 @@ The workflow runs every 15 minutes after you publish it in n8n. Docker and n8n m
 - PostgreSQL
 - SQL
 - JavaScript
+- Python
+- Power BI
 - Git and GitHub
 
 ## Setup
@@ -70,9 +81,9 @@ python load_sample_data.py data/event-registrations-100.csv --replace
 
 This replaces the current registrations, preserving `data_quality_results` history.
 Then execute the full n8n workflow. The current CSV contains 100 complete
-registrations with unique codes. All missing-value and duplicate counts should
-be zero, and the result should be PASS. The originally generated missing values
-and duplicates have been corrected for the clean-data demonstration.
+registrations with unique codes. Expect zero missing-value or duplicate counts
+and an overall PASS result. The two missing names used in the failure test have
+been restored.
 
 Use `--check` instead of `--replace` to test loading and roll back the data changes.
 CSV loading uses Python's standard library; PyYAML is only needed for YAML files.
@@ -96,9 +107,8 @@ docker compose exec database psql -U quality_user -d event_quality -c "DELETE FR
 ## Future Improvements
 
 - Send failures to email, Slack, or Discord
-- Store quality-check history in a reporting table
 - Add thresholds for acceptable missing-value rates
-- Create a Power BI dashboard for data-quality trends
+- Add charts for data-quality trends
 
 ## Power BI results history
 
