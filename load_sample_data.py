@@ -1,16 +1,11 @@
-"""Load YAML registrations into the local Docker PostgreSQL database."""
+"""Load CSV or YAML registrations into the local Docker PostgreSQL database."""
 
 import argparse
+import csv
 import json
 from pathlib import Path
 import subprocess
 import sys
-
-try:
-    import yaml
-except ImportError:
-    sys.exit("Install the YAML reader first: python -m pip install PyYAML")
-
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -19,16 +14,29 @@ def main():
     mode.add_argument("--replace", action="store_true", help="Replace current registrations")
     mode.add_argument("--check", action="store_true", help="Test the load, then roll it back")
     args = parser.parse_args()
-    data = yaml.safe_load(args.file.read_text(encoding="utf-8"))
     columns = {
         "registration_code", "full_name", "email", "event_name", "ticket_type",
         "registered_at", "source",
     }
-    if not isinstance(data, dict) or data.get("table") != "event_registrations":
-        sys.exit("The YAML table must be event_registrations.")
-    records = data.get("records")
+    if args.file.suffix.lower() == ".csv":
+        with args.file.open(encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            if not reader.fieldnames or len(reader.fieldnames) != len(columns) or set(reader.fieldnames) != columns:
+                sys.exit(f"CSV headers must be exactly: {', '.join(sorted(columns))}")
+            records = list(reader)
+    elif args.file.suffix.lower() in {".yml", ".yaml"}:
+        try:
+            import yaml
+        except ImportError:
+            sys.exit("Install the YAML reader first: python -m pip install PyYAML")
+        data = yaml.safe_load(args.file.read_text(encoding="utf-8"))
+        if not isinstance(data, dict) or data.get("table") != "event_registrations":
+            sys.exit("The YAML table must be event_registrations.")
+        records = data.get("records")
+    else:
+        sys.exit("Choose a .csv, .yml, or .yaml file.")
     if not isinstance(records, list) or not records:
-        sys.exit("The YAML must contain a nonempty records list.")
+        sys.exit("The file must contain at least one registration.")
     for index, record in enumerate(records, 1):
         if not isinstance(record, dict) or set(record) != columns:
             sys.exit(f"Record {index} must contain exactly: {', '.join(sorted(columns))}")
@@ -36,6 +44,9 @@ def main():
             sys.exit(f"Record {index}: values must be text or null; quote date/time values.")
         if record["source"] is None:
             sys.exit(f"Record {index}: source cannot be null.")
+        # An empty CSV timestamp represents missing data, not a timestamp string.
+        if isinstance(record["registered_at"], str) and not record["registered_at"].strip():
+            record["registered_at"] = None
 
     # Escape text as a SQL literal; table and column identifiers are fixed below.
     payload = json.dumps(records).replace("'", "''")
@@ -53,7 +64,12 @@ FROM jsonb_to_recordset('{payload}'::jsonb) AS r(
     ticket_type text, registered_at timestamptz, source text
 );
 SELECT COUNT(*) AS total_rows,
-       COUNT(*) FILTER (WHERE full_name IS NULL OR btrim(full_name) = '') AS missing_names
+       COUNT(*) FILTER (WHERE full_name IS NULL OR btrim(full_name) = '') AS missing_names,
+       COUNT(*) FILTER (WHERE email IS NULL OR btrim(email) = '') AS missing_emails,
+       COUNT(*) FILTER (WHERE event_name IS NULL OR btrim(event_name) = '') AS missing_events,
+       COUNT(*) FILTER (WHERE ticket_type IS NULL OR btrim(ticket_type) = '') AS missing_ticket_types,
+       COUNT(*) FILTER (WHERE registered_at IS NULL) AS missing_registration_dates,
+       COUNT(*) - COUNT(DISTINCT registration_code) AS duplicate_registration_codes
 FROM public.event_registrations;
 {finish};
 """

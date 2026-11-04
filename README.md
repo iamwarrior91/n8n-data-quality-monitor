@@ -60,6 +60,27 @@ Password: the POSTGRES_PASSWORD value in .env
 
 ## Demonstrate a Failed Check
 
+### Load the 100-record CSV
+
+With Docker running, execute from the project folder:
+
+```powershell
+python load_sample_data.py data/event-registrations-100.csv --replace
+```
+
+This replaces the current registrations, preserving `data_quality_results` history.
+Then execute the full n8n workflow. The current CSV contains 100 complete
+registrations with unique codes. All missing-value and duplicate counts should
+be zero, and the result should be PASS. The originally generated missing values
+and duplicates have been corrected for the clean-data demonstration.
+
+Use `--check` instead of `--replace` to test loading and roll back the data changes.
+CSV loading uses Python's standard library; PyYAML is only needed for YAML files.
+After editing the CSV, rerun the loader before running n8n. The current n8n
+schedule reads PostgreSQL; it does not automatically reload the CSV.
+
+### Insert a single bad record
+
 Insert an intentionally bad record:
 
 ```powershell
